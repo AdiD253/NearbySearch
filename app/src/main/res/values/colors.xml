@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#3dae9b</color>
+    <color name="colorPrimaryDark">#215e54</color>
+    <color name="colorAccent">#3dae9b</color>
+
+    <color name="skyriseColorPrimary">#3dae9b</color>
+    <color name="skyriseColorSecondary">#655d57</color>
+
+    <color name="colorMapCircleFill">#44655d57</color>
+    <color name="transparent">#00FFFFFF</color>
+
+    <color name="white">#FFF</color>
+    <color name="black">#000</color>
+    <color name="light_gray">#D3D3D3</color>
+</resources>
