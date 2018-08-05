@@ -10,7 +10,7 @@ import pl.defusadr.skyrisegplacesapi.model.Place
 class PlaceViewHolder(
         view: View,
         private val currentLocation: LatLng,
-        private val selectedPlace: (place: Place) -> Unit
+        private val showPlaceOnMap: (place: Place) -> Unit
 ) : RecyclerView.ViewHolder(view) {
 
     fun bind(place: Place) {
@@ -21,7 +21,7 @@ class PlaceViewHolder(
         itemView.placeDistanceFromLocation.text = itemView.context.getString(R.string.distance_km, distance)
 
         itemView.setOnClickListener {
-            selectedPlace.invoke(place)
+            showPlaceOnMap.invoke(place)
         }
     }
 }

@@ -1,5 +1,6 @@
 package pl.defusadr.skyrisegplacesapi.model
 
+import com.google.android.gms.maps.model.LatLng
 import com.google.gson.annotations.SerializedName
 
 class SearchServiceResponse(
@@ -32,5 +33,20 @@ class SearchServiceResult(
 
 class SearchServiceGeometry(
         @SerializedName("location")
-        var latLng: LatLng
+        var latLng: LatLngModel
 )
+
+class LatLngModel(
+        @SerializedName("lat")
+        var lat: Double,
+
+        @SerializedName("lng")
+        var lng: Double
+) {
+
+    constructor(latLng: LatLng) : this(latLng.latitude, latLng.longitude)
+
+    fun mapToLatLng(): LatLng = LatLng(this.lat, this.lng)
+
+    override fun toString() = "${this.lat},${this.lng}"
+}

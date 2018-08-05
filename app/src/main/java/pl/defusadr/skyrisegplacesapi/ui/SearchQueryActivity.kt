@@ -1,6 +1,5 @@
 package pl.defusadr.skyrisegplacesapi.ui
 
-import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Rect
 import android.os.Bundle
@@ -17,7 +16,6 @@ import android.text.TextUtils
 import android.text.TextWatcher
 import android.view.View
 import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputMethodManager
 import android.widget.SeekBar
 import android.widget.Toast
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -40,7 +38,9 @@ import pl.defusadr.skyrisegplacesapi.service.PlaceSearchOverQueryError
 import pl.defusadr.skyrisegplacesapi.service.PlaceSearchRequestDeniedError
 import pl.defusadr.skyrisegplacesapi.service.PlaceSearchZeroResultError
 import pl.defusadr.skyrisegplacesapi.ui.adapter.SearchQueryAdapter
+import pl.defusadr.skyrisegplacesapi.util.hideKeyboard
 import pl.defusadr.skyrisegplacesapi.util.removeAllMarkers
+import pl.defusadr.skyrisegplacesapi.util.setVisibility
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -69,9 +69,7 @@ class SearchQueryActivity : AppCompatActivity(), SearchQueryView, OnMapReadyCall
 
     private val placesAdapter: SearchQueryAdapter by lazy {
         SearchQueryAdapter {
-            it.placeMarker?.showInfoWindow()
-            zoomMap(false, LatLng(it.lat, it.lng), 16)
-            bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+            showPlaceOnMap(it)
         }
     }
 
@@ -82,11 +80,7 @@ class SearchQueryActivity : AppCompatActivity(), SearchQueryView, OnMapReadyCall
         setContentView(R.layout.activity_search_query)
         AndroidInjection.inject(this@SearchQueryActivity)
 
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this@SearchQueryActivity)
-        val mapFragment = supportFragmentManager
-                .findFragmentById(R.id.fragmentMap) as SupportMapFragment
-        mapFragment.getMapAsync(this)
-
+        initMapComponents()
         initUIComponents()
     }
 
@@ -115,7 +109,7 @@ class SearchQueryActivity : AppCompatActivity(), SearchQueryView, OnMapReadyCall
         placeMarkers.removeAllMarkers()
         placesAdapter.clear()
         places.forEach {
-            placeMarkerOnMap(LatLng(it.lat, it.lng), it.name).apply {
+            placeMarkerOnMap(it.location, it.name).apply {
                 it.placeMarker = this
                 placeMarkers.add(this)
             }
@@ -126,8 +120,8 @@ class SearchQueryActivity : AppCompatActivity(), SearchQueryView, OnMapReadyCall
         showPlacesBottomSheet(getString(R.string.show_places, placeMarkers.size), true)
     }
 
-    override fun setProgress(visible: Boolean) {
-        searchProgress.visibility = if (visible) View.VISIBLE else View.GONE
+    override fun setProgress(visible: Boolean?) {
+        searchProgress.setVisibility(visible)
     }
 
     override fun showError(throwable: Throwable) {
@@ -175,59 +169,44 @@ class SearchQueryActivity : AppCompatActivity(), SearchQueryView, OnMapReadyCall
         setUpMap(shouldAskForPermission = true)
     }
 
-    override fun onMarkerClick(p0: Marker?): Boolean {
-        return false
-    }
+    override fun onMarkerClick(p0: Marker?) = false
 
     //endregion
+
+    private fun initSearchSubject() {
+        searchSubject
+                .debounce(1000, TimeUnit.MILLISECONDS)
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe {
+                    if (!TextUtils.isEmpty(it)) {
+                        zoomMap(false)
+                        hideKeyboard()
+                        searchForPlacesByQuery(it)
+                    }
+                }
+    }
+
+    private fun searchForPlacesByQuery(input: String) {
+        presenter.searchForPlaces(
+                input.trim(),
+                currentRadius,
+                searchLocation,
+                getString(R.string.google_maps_key)
+        )
+    }
+
+    private fun initMapComponents() {
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this@SearchQueryActivity)
+        val mapFragment = supportFragmentManager
+                .findFragmentById(R.id.fragmentMap) as SupportMapFragment
+        mapFragment.getMapAsync(this)
+    }
 
     private fun initUIComponents() {
         initRecycler()
         initSeekBar()
         initPlacesBottomSheet()
-
-        myLocationImage.setOnClickListener {
-            zoomMap(false)
-            bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
-        }
-
-        searchClearQuery.setOnClickListener {
-            zoomMap(false)
-            searchEditText.setText("")
-            hideKeyboard()
-            placesBottomSheet.visibility = View.GONE
-            map.uiSettings.setAllGesturesEnabled(true)
-        }
-
-        searchEditText.apply {
-            addTextChangedListener(object : TextWatcher {
-                override fun afterTextChanged(s: Editable) {}
-
-                override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) {}
-
-                override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
-                    if (TextUtils.isEmpty(s)) {
-                        searchClearQuery.visibility = View.GONE
-                        placeMarkers.removeAllMarkers()
-                    } else {
-                        searchClearQuery.visibility = View.VISIBLE
-                    }
-                    placesBottomSheet.visibility = View.GONE
-                    map.uiSettings.setAllGesturesEnabled(true)
-                    searchSubject.onNext(s.toString())
-                }
-            })
-
-            setOnEditorActionListener { _, actionId, _ ->
-                if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-                    bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
-                    placesBottomSheet.visibility = View.GONE
-                    hideKeyboard()
-                    searchForPlacesByQuery(this.text.toString())
-                    true
-                } else false
-            }
-        }
+        initListeners()
     }
 
     private fun initRecycler() {
@@ -257,11 +236,7 @@ class SearchQueryActivity : AppCompatActivity(), SearchQueryView, OnMapReadyCall
             progress = currentRadius
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                    val selectedValue = minValue + progress
-                    currentRadius = selectedValue
-                    searchRangeInfoTv.text = getString(R.string.search_radius, currentRadius)
-                    zoomMap(true)
-                    searchSubject.onNext(searchEditText.text.toString())
+                    onSeekBarProgressChanged(minValue, progress)
                 }
 
                 override fun onStartTrackingTouch(seekBar: SeekBar?) {
@@ -274,94 +249,148 @@ class SearchQueryActivity : AppCompatActivity(), SearchQueryView, OnMapReadyCall
         }
     }
 
+    private fun onSeekBarProgressChanged(minValue: Int, progress: Int) {
+        val selectedValue = minValue + progress
+        currentRadius = selectedValue
+        searchRangeInfoTv.text = getString(R.string.search_radius, currentRadius)
+        zoomMap(true)
+        searchSubject.onNext(searchEditText.text.toString())
+    }
+
     private fun initPlacesBottomSheet() {
         placesBottomSheet.visibility = View.GONE
         bottomSheetBehavior = BottomSheetBehavior.from(placesBottomSheet)
         bottomSheetBehavior.isHideable = false
 
         placesBottomSheetPeekTitle.setOnClickListener {
-            when (bottomSheetBehavior.state) {
-                BottomSheetBehavior.STATE_COLLAPSED -> {
-                    bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
-                }
-                BottomSheetBehavior.STATE_EXPANDED -> {
-                    bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
-                }
-            }
+            changeBottomSheetState(bottomSheetBehavior)
         }
+
         bottomSheetBehavior.setBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
             override fun onSlide(bottomSheet: View, slideOffset: Float) {
             }
 
             override fun onStateChanged(bottomSheet: View, newState: Int) {
                 when (newState) {
-                    BottomSheetBehavior.STATE_EXPANDED -> {
-                        placesBottomSheetPeekTitle.visibility = View.VISIBLE
-
-                        placesBottomSheetPeekTitle.text = getString(R.string.places_for_query, searchEditText.text.trim())
-                        map.uiSettings.setAllGesturesEnabled(false)
-                    }
-                    BottomSheetBehavior.STATE_COLLAPSED -> {
-                        placesBottomSheetPeekTitle.visibility = View.VISIBLE
-                        placesBottomSheetPeekTitle.text = getString(R.string.show_places, placeMarkers.size)
-                        map.uiSettings.setAllGesturesEnabled(true)
-                    }
+                    BottomSheetBehavior.STATE_EXPANDED -> setBottomSheetStateExpanded(false)
+                    BottomSheetBehavior.STATE_COLLAPSED -> setBottomSheetStateExpanded(true)
                 }
             }
         })
     }
 
-    private fun initSearchSubject() {
-        searchSubject
-                .debounce(1000, TimeUnit.MILLISECONDS)
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe {
-                    if (!TextUtils.isEmpty(it)) {
-                        zoomMap(false)
-                        hideKeyboard()
-                        searchForPlacesByQuery(it)
+    private fun changeBottomSheetState(bottomSheetBehavior: BottomSheetBehavior<View>) {
+        when (bottomSheetBehavior.state) {
+            BottomSheetBehavior.STATE_COLLAPSED -> {
+                bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+            }
+            BottomSheetBehavior.STATE_EXPANDED -> {
+                bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+            }
+        }
+    }
+
+    private fun setBottomSheetStateExpanded(isCollapsed: Boolean) {
+        placesBottomSheetPeekTitle.visibility = View.VISIBLE
+        map.uiSettings.setAllGesturesEnabled(isCollapsed)
+        val peekTitle =
+                if (isCollapsed)
+                    getString(R.string.show_places, placeMarkers.size)
+                else
+                    getString(R.string.places_for_query, searchEditText.text.trim())
+
+        placesBottomSheetPeekTitle.text = peekTitle
+    }
+
+    private fun initListeners() {
+        myLocationImage.setOnClickListener {
+            zoomMap(false)
+            bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+        }
+
+        searchClearQuery.setOnClickListener {
+            restoreDefaultState()
+        }
+
+        searchEditText.apply {
+            addTextChangedListener(object : TextWatcher {
+                override fun afterTextChanged(s: Editable) {}
+
+                override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) {}
+
+                override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
+                    if (TextUtils.isEmpty(s)) {
+                        searchClearQuery.visibility = View.GONE
+                        placeMarkers.removeAllMarkers()
+                    } else {
+                        searchClearQuery.visibility = View.VISIBLE
                     }
+                    placesBottomSheet.visibility = View.GONE
+                    map.uiSettings.setAllGesturesEnabled(true)
                 }
+            })
+
+            setOnEditorActionListener { _, actionId, _ ->
+                if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                    val query = searchEditText.text.toString()
+                    if (query.isNotEmpty())
+                        prepareViewAndSearchByQuery(query)
+                    true
+                } else false
+            }
+        }
+    }
+
+    private fun restoreDefaultState() {
+        zoomMap(false)
+        searchEditText.setText("")
+        hideKeyboard()
+        placesBottomSheet.visibility = View.GONE
+        map.uiSettings.setAllGesturesEnabled(true)
+    }
+
+    private fun prepareViewAndSearchByQuery(query: String) {
+        bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+        placesBottomSheet.visibility = View.GONE
+        zoomMap(false)
+        hideKeyboard()
+        searchForPlacesByQuery(query)
     }
 
     private fun setUpMap(shouldAskForPermission: Boolean = false) {
         if (ActivityCompat.checkSelfPermission(this,
                         android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            map.isMyLocationEnabled = false
-            fusedLocationClient.lastLocation.addOnSuccessListener(this) {
-                it?.let {
-                    searchLocation = LatLng(it.latitude, it.longitude)
-                    placesAdapter.setCurrentLocation(searchLocation)
-                    placeMarkerOnMap(searchLocation, iconRes = R.drawable.human_icon)
-                    zoomMap(true)
-                }
-            }
+            initMapWithUserLocation()
         } else {
             if (shouldAskForPermission) {
                 ActivityCompat.requestPermissions(this,
                         arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION), LOCATION_PERMISSION_REQUEST_CODE)
             } else {
-                searchLocation = skyrise
-                placesAdapter.setCurrentLocation(searchLocation)
+                initMapForLocation(skyrise)
                 Toast.makeText(
                         this@SearchQueryActivity,
                         getString(R.string.no_location_permission_granted),
                         Toast.LENGTH_LONG
                 ).show()
-                placeMarkerOnMap(searchLocation, iconRes = R.drawable.skyrise)
-                zoomMap(true)
             }
         }
     }
 
-    private fun searchForPlacesByQuery(input: String) {
-        presenter.searchForPlaces(
-                input.trim(),
-                currentRadius,
-                searchLocation.latitude,
-                searchLocation.longitude,
-                getString(R.string.google_maps_key)
-        )
+    @Throws(SecurityException::class)
+    private fun initMapWithUserLocation() {
+        map.isMyLocationEnabled = false
+        fusedLocationClient.lastLocation.addOnSuccessListener(this) {
+            it?.let {
+                initMapForLocation(LatLng(it.latitude, it.longitude))
+            }
+        }
+    }
+
+    private fun initMapForLocation(location: LatLng) {
+        searchLocation = location
+        placesAdapter.setCurrentLocation(searchLocation)
+        placeMarkerOnMap(searchLocation, iconRes = R.drawable.human_icon)
+        zoomMap(true)
     }
 
     private fun placeMarkerOnMap(location: LatLng, title: String? = null, @DrawableRes iconRes: Int? = null): Marker {
@@ -374,16 +403,10 @@ class SearchQueryActivity : AppCompatActivity(), SearchQueryView, OnMapReadyCall
         return map.addMarker(markerOptions)
     }
 
-    private fun placeCircleOnMap(location: LatLng, radius: Int) {
-        val circleOptions = CircleOptions()
-                .center(location)
-                .radius(radius.toDouble())
-                .strokeColor(ContextCompat.getColor(this@SearchQueryActivity, R.color.colorAccent))
-                .fillColor(ContextCompat.getColor(this@SearchQueryActivity, R.color.colorMapCircleFill))
-
-        if (this::currentCircle.isInitialized)
-            this.currentCircle.remove()
-        this.currentCircle = map.addCircle(circleOptions)
+    private fun showPlaceOnMap(place: Place) {
+        place.placeMarker?.showInfoWindow()
+        zoomMap(false, place.location, 16)
+        bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
     }
 
     private fun zoomMap(drawCircle: Boolean, customLocation: LatLng? = null, customZoom: Int? = null) {
@@ -401,15 +424,6 @@ class SearchQueryActivity : AppCompatActivity(), SearchQueryView, OnMapReadyCall
             placeCircleOnMap(searchLocation, currentRadius)
     }
 
-    private fun showPlacesBottomSheet(titleText: String, clickable: Boolean) {
-        placesBottomSheet.visibility = View.VISIBLE
-        bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
-        placesBottomSheetPeekTitle.apply {
-            isClickable = clickable
-            text = titleText
-        }
-    }
-
     private fun getBoundsFromCenterRadius(center: LatLng, radiusInMeters: Int): LatLngBounds {
         val distanceFromCenterToCorner = radiusInMeters * Math.sqrt(2.0)
         val southwestCorner = SphericalUtil.computeOffset(center, distanceFromCenterToCorner, 225.0)
@@ -417,10 +431,24 @@ class SearchQueryActivity : AppCompatActivity(), SearchQueryView, OnMapReadyCall
         return LatLngBounds(southwestCorner, northeastCorner)
     }
 
-    private fun hideKeyboard() {
-        currentFocus?.let {
-            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-            imm?.hideSoftInputFromWindow(it.windowToken, 0)
+    private fun placeCircleOnMap(location: LatLng, radius: Int) {
+        val circleOptions = CircleOptions()
+                .center(location)
+                .radius(radius.toDouble())
+                .strokeColor(ContextCompat.getColor(this@SearchQueryActivity, R.color.colorAccent))
+                .fillColor(ContextCompat.getColor(this@SearchQueryActivity, R.color.colorMapCircleFill))
+
+        if (this::currentCircle.isInitialized)
+            this.currentCircle.remove()
+        this.currentCircle = map.addCircle(circleOptions)
+    }
+
+    private fun showPlacesBottomSheet(titleText: String, clickable: Boolean) {
+        placesBottomSheet.visibility = View.VISIBLE
+        bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+        placesBottomSheetPeekTitle.apply {
+            isClickable = clickable
+            text = titleText
         }
     }
 }

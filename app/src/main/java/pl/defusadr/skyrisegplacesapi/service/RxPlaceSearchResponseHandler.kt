@@ -9,7 +9,7 @@ fun Observable<SearchServiceResponse>.handleRxPlaceSearchResponse(): Observable<
     this.flatMap { RxPlaceSearchResponseHandler().apply(it) }
 
 
-class RxPlaceSearchResponseHandler
+private class RxPlaceSearchResponseHandler
     : Function<SearchServiceResponse, ObservableSource<SearchServiceResponse>> {
 
     companion object {

@@ -1,11 +1,12 @@
 package pl.defusadr.skyrisegplacesapi.ui
 
+import com.google.android.gms.maps.model.LatLng
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.rxkotlin.plusAssign
 import io.reactivex.rxkotlin.subscribeBy
 import io.reactivex.schedulers.Schedulers
-import pl.defusadr.skyrisegplacesapi.model.LatLng
+import pl.defusadr.skyrisegplacesapi.model.LatLngModel
 import pl.defusadr.skyrisegplacesapi.model.Place
 import pl.defusadr.skyrisegplacesapi.service.GPlacesService
 import pl.defusadr.skyrisegplacesapi.service.handleRxPlaceSearchResponse
@@ -31,15 +32,13 @@ class SearchQueryPresenterImpl @Inject constructor(
     override fun searchForPlaces(
             input: String,
             radius: Int,
-            latitude: Double,
-            longitude: Double,
+            location: LatLng,
             appKey: String
     ) {
-        val location = LatLng(latitude, longitude)
         disposable +=
                 service.getPlaces(
                         keyword = input,
-                        location = location,
+                        location = LatLngModel(location),
                         radius = radius,
                         appKey = appKey
                 )
@@ -52,8 +51,7 @@ class SearchQueryPresenterImpl @Inject constructor(
                                                 name = it.name,
                                                 vicinity = it.vicinity,
                                                 icon = it.icon,
-                                                lat = it.geometry.latLng.lat,
-                                                lng = it.geometry.latLng.lng
+                                                location = it.geometry.latLng.mapToLatLng()
                                         )
                                     }
                                     ?.filterByMaxRange(

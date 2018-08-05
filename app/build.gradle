@@ -23,27 +23,30 @@ android {
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation"org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-    implementation 'com.android.support:appcompat-v7:27.1.1'
-    implementation 'com.android.support:design:27.1.1'
-    implementation 'com.android.support.constraint:constraint-layout:1.1.2'
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$rootProject.kotlin_version"
+    implementation "com.android.support:appcompat-v7:$rootProject.support_version"
+    implementation "com.android.support:design:$rootProject.support_version"
+    implementation "com.android.support.constraint:constraint-layout:$rootProject.constraint_version"
 
     //Google
-    implementation "com.google.firebase:firebase-core:16.0.1"
-    implementation "com.google.android.gms:play-services-maps:15.0.1"
-    implementation "com.google.android.gms:play-services-location:15.0.1"
-    implementation "com.google.maps.android:android-maps-utils:0.4.4"
+    implementation "com.google.firebase:firebase-core:$rootProject.firebase_version"
+    implementation "com.google.android.gms:play-services-maps:$rootProject.play_services_version"
+    implementation "com.google.android.gms:play-services-location:$rootProject.play_services_version"
+    implementation "com.google.maps.android:android-maps-utils:$rootProject.maps_utils_version"
 
     //ReactiveX
-    implementation "io.reactivex.rxjava2:rxjava:2.1.16"
-    implementation "io.reactivex.rxjava2:rxkotlin:2.2.0"
-    implementation "io.reactivex.rxjava2:rxandroid:2.0.2"
+    implementation "io.reactivex.rxjava2:rxjava:$rootProject.rxJava_version"
+    implementation "io.reactivex.rxjava2:rxkotlin:$rootProject.rxKotlin_version"
+    implementation "io.reactivex.rxjava2:rxandroid:$rootProject.rxAndroid_version"
 
     //Retrofit
-    implementation "com.squareup.retrofit2:retrofit:2.4.0"
-    implementation "com.squareup.retrofit2:adapter-rxjava2:2.3.0"
-    implementation "com.squareup.retrofit2:converter-gson:2.3.0"
-    implementation "com.google.code.gson:gson:2.8.2"
+    implementation "com.squareup.retrofit2:retrofit:$rootProject.retrofit_version"
+    implementation "com.squareup.retrofit2:adapter-rxjava2:$rootProject.retrofit_adapter_version"
+    implementation "com.squareup.retrofit2:converter-gson:$rootProject.retrofit_adapter_version"
+    implementation "com.google.code.gson:gson:$rootProject.gson_version"
+
+    //OkHttp
+    implementation "com.squareup.okhttp3:okhttp:$rootProject.okHttp_version"
 
     //DI
     implementation "com.google.dagger:dagger:$rootProject.dagger_version"
@@ -54,16 +57,12 @@ dependencies {
     kapt "com.google.dagger:dagger-android-processor:$rootProject.dagger_version"
     kapt "com.google.dagger:dagger-compiler:$rootProject.dagger_version"
 
-    //OkHttp
-    implementation "com.squareup.okhttp3:okhttp:3.11.0"
-    implementation "com.squareup.okhttp3:logging-interceptor:3.9.1"
-
     //Other
-    implementation "com.jakewharton.timber:timber:4.7.1"
+    implementation "com.jakewharton.timber:timber:$rootProject.timber_version"
 
-    testImplementation 'junit:junit:4.12'
-    androidTestImplementation 'com.android.support.test:runner:1.0.2'
-    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+    testImplementation "junit:junit:$rootProject.junit_version"
+    androidTestImplementation "com.android.support.test:runner:$rootProject.test_runner_version"
+    androidTestImplementation "com.android.support.test.espresso:espresso-core:$rootProject.espresso_version"
 }
 
 apply plugin: 'com.google.gms.google-services'
